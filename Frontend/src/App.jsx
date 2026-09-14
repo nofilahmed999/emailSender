@@ -22,7 +22,7 @@ const App = () => {
     setLoading(true);
 
     try {
-      const response = await axios.post("https://email-sender-two-eta.vercel.app//api/contact", formData);
+      const response = await axios.post("https://email-sender-two-eta.vercel.app/api/contact", formData);
 
       if (response.data.success) {
         toast.success("Message sent successfully! Check your inbox.", {
