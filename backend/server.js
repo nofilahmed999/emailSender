@@ -18,6 +18,11 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// Root Route (Health Check for Vercel/Render)
+app.get("/", (req, res) => {
+  res.send("Backend is running successfully!");
+});
+
 // Contact Route
 app.post("/api/contact", async (req, res) => {
   const { name, email, subject, message } = req.body;
@@ -31,13 +36,11 @@ app.post("/api/contact", async (req, res) => {
   }
 
   try {
-    // =========================================================================
-    // 1. NOTIFICATION EMAIL -> Sent to YOUR CLIENT'S inbox (process.env.EMAIL_USER)
-    // =========================================================================
+    // 1. NOTIFICATION EMAIL -> Sent to YOUR CLIENT'S inbox
     await transporter.sendMail({
       from: `"Website Contact Form" <${process.env.EMAIL_USER}>`,
-      to: process.env.EMAIL_USER, // <--- DELIVERS TO CLIENT INBOX
-      replyTo: email,             // So client can click "Reply" directly to visitor
+      to: process.env.EMAIL_USER,
+      replyTo: email,
       subject: `New Form Submission: ${subject}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">
@@ -54,12 +57,10 @@ app.post("/api/contact", async (req, res) => {
       `,
     });
 
-    // =========================================================================
-    // 2. CONFIRMATION EMAIL -> Sent to the VISITOR'S email address (email variable)
-    // =========================================================================
+    // 2. CONFIRMATION EMAIL -> Sent to VISITOR'S inbox
     await transporter.sendMail({
       from: `"Client Support" <${process.env.EMAIL_USER}>`,
-      to: email,                  // <--- DELIVERS TO VISITOR
+      to: email,
       subject: "We received your message!",
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">
@@ -86,5 +87,5 @@ app.post("/api/contact", async (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
