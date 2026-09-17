@@ -103,7 +103,7 @@ app.post("/api/contact", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Failed to dispatch email. Please try again later.",
+      message: "Failed to dispatch email. Please Use real email...",
     });
   }
 });
