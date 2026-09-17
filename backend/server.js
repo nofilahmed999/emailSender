@@ -2,14 +2,13 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
+const axios = require("axios");
 
 const app = express();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Transporter Configuration
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -18,16 +17,13 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Root Route (Health Check for Vercel/Render)
 app.get("/", (req, res) => {
   res.send("Backend is running successfully!");
 });
 
-// Contact Route
 app.post("/api/contact", async (req, res) => {
   const { name, email, subject, message } = req.body;
 
-  // Validation
   if (!name || !email || !subject || !message) {
     return res.status(400).json({
       success: false,
@@ -36,38 +32,55 @@ app.post("/api/contact", async (req, res) => {
   }
 
   try {
-    // 1. NOTIFICATION EMAIL -> Sent to YOUR CLIENT'S inbox
+    // 1. AbstractAPI Email Verification
+    const apiKey = process.env.ABSTRACT_API_KEY;
+    const verifyUrl = `https://emailvalidation.abstractapi.com/v1/?api_key=${apiKey}&email=${email}`;
+
+    const apiRes = await axios.get(verifyUrl, { timeout: 5000 });
+    const data = apiRes.data;
+
+    console.log("AbstractAPI Output:", data);
+
+    // Exact checks according to AbstractAPI response structure
+    const isValidFormat = data.is_valid_format?.value ?? false;
+    const isDeliverable = data.deliverability === "DELIVERABLE";
+    const isDisposable = data.is_disposable_email?.value ?? false;
+    const qualityScore = parseFloat(data.quality_score || 0);
+
+    // Reject invalid, undeliverable, disposable, or low score (< 0.70) emails
+    if (!isValidFormat || !isDeliverable || isDisposable || qualityScore < 0.70) {
+      return res.status(400).json({
+        success: false,
+        message: "Please use your real email address.",
+      });
+    }
+
+    // 2. Dispatch Emails via Nodemailer
     await transporter.sendMail({
       from: `"Website Contact Form" <${process.env.EMAIL_USER}>`,
       to: process.env.EMAIL_USER,
       replyTo: email,
       subject: `New Form Submission: ${subject}`,
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">
-          <h2 style="color: #2563eb;">New Website Inquiry</h2>
-          <hr style="border: none; border-top: 1px solid #e5e7eb;" />
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <h2>New Website Inquiry</h2>
           <p><strong>Visitor Name:</strong> ${name}</p>
           <p><strong>Visitor Email:</strong> ${email}</p>
           <p><strong>Subject:</strong> ${subject}</p>
           <p><strong>Message:</strong></p>
-          <blockquote style="background: #f3f4f6; padding: 15px; border-left: 4px solid #2563eb; margin: 0;">
-            ${message}
-          </blockquote>
+          <blockquote>${message}</blockquote>
         </div>
       `,
     });
 
-    // 2. CONFIRMATION EMAIL -> Sent to VISITOR'S inbox
     await transporter.sendMail({
       from: `"Client Support" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: "We received your message!",
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; line-height: 1.6;">
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
           <h2>Thanks for reaching out, ${name}! 👋</h2>
-          <p>We have received your inquiry regarding <strong>"${subject}"</strong> and will get back to you shortly.</p>
-          <hr style="border: none; border-top: 1px solid #e5e7eb;" />
-          <p style="font-size: 12px; color: #6b7280;">This is an automated confirmation email.</p>
+          <p>We received your inquiry regarding "<strong>${subject}</strong>" and will reply shortly.</p>
         </div>
       `,
     });
@@ -76,11 +89,21 @@ app.post("/api/contact", async (req, res) => {
       success: true,
       message: "Emails sent successfully!",
     });
+
   } catch (error) {
-    console.error("Nodemailer Error:", error);
+    console.error("API / Server Error:", error.response?.data || error.message);
+    
+    // AbstractAPI validation fail catch
+    if (error.response?.status === 400) {
+      return res.status(400).json({
+        success: false,
+        message: "Please use your real email address.",
+      });
+    }
+
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to dispatch emails.",
+      message: "Failed to dispatch email. Please try again later.",
     });
   }
 });
